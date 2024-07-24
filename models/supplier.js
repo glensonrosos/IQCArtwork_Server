@@ -1,6 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
 
 const supplierSchema = mongoose.Schema({
+    supplierCode:String,
     name:String,
 });
 

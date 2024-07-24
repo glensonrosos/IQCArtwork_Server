@@ -6,18 +6,6 @@ const itemSchema = mongoose.Schema({
     supplier:{
         _id : Schema.Types.ObjectId,
         name:String,
-    } ,
-    buyer:{
-        _id : Schema.Types.ObjectId,
-        name:String,
-    },
-    material:{
-        _id : Schema.Types.ObjectId,
-        name:String,
-    },
-    moldMaterial:{
-        _id : Schema.Types.ObjectId,
-        name:String,
     },
     createdAt:Date,
     updatedAt:Date,
