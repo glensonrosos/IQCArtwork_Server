@@ -1,15 +1,34 @@
 import mongoose, { Schema } from 'mongoose';
 
 const defectDataSchema = mongoose.Schema({
-    defectId:Schema.Types.ObjectId,
-    areaId:Schema.Types.ObjectId,
-    qty:Number,
-    numericData:String,
-    passId:Schema.Types.ObjectId,
+    inspectionId:{
+      type: Schema.Types.ObjectId,
+      required: true
+    },
+    passType: {
+        type: String,
+        enum: ['firstPassDefect', 'firstPassPullOut', 'secondPassPullOut'],
+        required: true
+    },
+    defectDetails: [
+        {
+          id:{ type: Number, required: true },
+          defect: {
+            _id: { type: Schema.Types.ObjectId, required: true },
+            name: { type: String, required: true },
+          },
+          area: {
+            _id: { type: Schema.Types.ObjectId, required: true },
+            name: { type: String, required: true },
+          },
+          majorQty: { type: Number, required: true },
+          numericData: { type: String, required: false },
+        },
+    ],
     createdAt:Date,
     updatedAt:Date,
     deletedAt:Date,
-    lastEditdBy:String,
+    editedBy:String,
 });
 
 const DefectData = mongoose.model('DefectData',defectDataSchema);

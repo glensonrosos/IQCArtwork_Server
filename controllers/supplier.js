@@ -9,3 +9,15 @@ export const getSuppliers = async (req,res)=>{
     }
 }
 
+export const createSupplier = async (req,res)=>{
+    const supplier = req.body;
+    try{
+        const newSupplier = await new Supplier(supplier);
+        await newSupplier.save();
+        res.status(201).json(supplier);
+    }catch(error){
+        res.status(404).json({message: error.message});
+    }
+}
+
+

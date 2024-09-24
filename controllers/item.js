@@ -20,79 +20,63 @@ export const getItems = async (req,res)=>{
     }
 }
 
-export const getItemsBySearch = async (req,res)=>{
+export const createItem = async (req,res)=>{
+    const item = req.body;
     try{
-
-        const {itemcode,itemdesc,supplier,buyer,material,moldMaterial,page} = req.query;
-
-        let query = {};
-      
-        // Construct the query object based on the presence of query parameters
-        
-        if (itemcode) {
-        query.itemCode = {$regex: '.*' + itemcode + '.*', $options: 'i'};
-        }
-        if (itemdesc) {
-        query.itemDescription = {$regex: '.*' + itemdesc + '.*', $options: 'i'};
-        }
-        if (supplier) {
-        query['supplier._id'] = supplier;
-        }
-        if (buyer) {
-        query['buyer._id'] = buyer;
-        }
-        if (material) {
-        query['material._id'] = material;
-        }
-        if (moldMaterial) {
-        query['moldMaterial._id'] = moldMaterial;
-        }
-        
-
-        let items = [];
-        const LIMIT = 5 ;
-        //get the starting index of evert page;
-        const startIndex = ( Number(page)-1 ) * LIMIT;
-        let total = null;
-     
-        // If no query parameters are provided, find all documents
-        if (Object.keys(query).length === 0) {
-            total = await Item.find().countDocuments();
-            items = await Item.find();
-        } else {
-            total = await Item.find(query).countDocuments();
-            items = await Item.find(query).sort({ _id: -1 }).limit(LIMIT).skip(startIndex);
-        }
-
-
-        res.status(200).json({items, 
-            currentPage:(Number(page)), numberOfPages:Math.ceil(total/ LIMIT) });
-
+        const newItem = await new Item(item);
+        await newItem.save();
+        res.status(201).json(item);
     }catch(error){
         res.status(404).json({message: error.message});
     }
 }
 
-export const createItem = async (req,res)=>{
-    const item = req.body;
+export const createMultipleItem = async (req, res) => {
+    const items = req.body; // Expecting an array of items
+    try {
+        const newItems = await Item.insertMany(items);
+        res.status(201).json({message: "insertion successful"});
+    } catch (error) {
+        res.status(404).json({ message: error });
+    }
+}
 
+export const findItems = async (req, res) => {
+
+    const { itemCode } = req.body;
+    try {
+        const items = await Item.find({ itemCode: { $regex: `^${itemCode}`, $options: 'i' } }); 
+
+        console.log(`findItem called with itemCode: ${itemCode}, results: ${JSON.stringify(items)}`);
+        if (items.length > 0)
+            return res.status(200).json({ items: items, message: "item found" });
+        else
+            return res.status(200).json({ items: [], message: "no found" });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({ message: "An error occurred", error: error.message });
+    }
+}
+
+
+export const getItemById = async (req,res)=>{
+
+    const {id} = req.params;
+
+    if(!mongoose.Types.ObjectId.isValid(id))
+        return res.status(404).send('invalid item code ');
     try{
+        const item = await Item.findOne({_id:id});
 
-        const isDuplicateItemCode = await Item.findOne({itemCode:item.itemCode, 'supplier._id': item.supplier._id});
-
-        if (isDuplicateItemCode) {
-            return res.status(200).json({message:'duplicate'});
-        }
-
-        const newItem = await new Item(item);
-        newItem.createdAt = new Date().toISOString();
-        newItem.updatedAt = new Date().toISOString();
-        newItem.deletedAt = null;
-
-        await newItem.save();
-        res.status(201).json(newItem);
+        console.log(`findItem called ${JSON.stringify(item)}`);
+        if(item !== null)
+            return res.status(200).json({item:item,message:"item found"});
+        else
+            return res.status(200).json({item:null,message:"no found"});
+        
     }catch(error){
-        res.status(404).json({message: error.message});
+        console.log(error);
     }
 }
 

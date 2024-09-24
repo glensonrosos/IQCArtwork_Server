@@ -2,28 +2,45 @@ import mongoose, { Schema } from 'mongoose';
 
 const inspectionSchema = mongoose.Schema({
     date:Date,
-    supplierId:Schema.Types.ObjectId,
-    itemId: Schema.Types.ObjectId,
+    supplier:{
+        _id : Schema.Types.ObjectId,
+        supplierCode: String,
+        name:String,
+    },
+    item:{
+        _id : Schema.Types.ObjectId,
+        itemCode:String,
+        itemDescription:String,
+    },
     deliveryQty: Number,
     totalMinWork: Number,
-    buyerId: Schema.Types.ObjectId,
-    materialId:Schema.Types.ObjectId,
+    buyer:{
+        _id : Schema.Types.ObjectId,
+        supplierCode: String,
+        name:String,
+    },
+    material:{
+        _id : Schema.Types.ObjectId,
+        name:String,
+    },
     weight: Number,
     totalGoodQty: Number,
     totalPullOutQty: Number,
     firstPass:{
-        _id: Schema.Types.ObjectId,
         defectQty: Number,
         totalGoodQty: Number,
         totalPullOutQty: Number
     },
     secondPass:{
-        _id: Schema.Types.ObjectId,
         totalGoodQty: Number,
-        pullOutQty:Number,
+        totalPullOutQty: Number,
     },
     remarks:String,
     unfinished:Number,
+    createdAt:Date,
+    updatedAt:Date,
+    deletedAt:Date,
+    editedBy:String,
 });
 
 const Inspection = mongoose.model('Inspection',inspectionSchema);

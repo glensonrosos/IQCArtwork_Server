@@ -9,3 +9,14 @@ export const getMaterials = async (req,res)=>{
     }
 }
 
+export const createMaterial = async (req,res)=>{
+    const material = req.body;
+    try{
+        const newMaterial = await new Material(material);
+        await newMaterial.save();
+        res.status(201).json(material);
+    }catch(error){
+        res.status(404).json({message: error.message});
+    }
+}
+

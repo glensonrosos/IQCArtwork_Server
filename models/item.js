@@ -1,16 +1,12 @@
 import mongoose, { Schema } from 'mongoose';
 
 const itemSchema = mongoose.Schema({
-    itemCode:String,
+    number: { type: Number, required: false },
+    itemCode: { type: String, required: false},
     itemDescription:String,
-    supplier:{
-        _id : Schema.Types.ObjectId,
-        name:String,
-    },
-    createdAt:Date,
-    updatedAt:Date,
-    deletedAt:Date,
-    lastEditdBy:String,
+    weight:Number,
+    buyer:String,
+    material:String,
 });
 
 const Item = mongoose.model('Item',itemSchema);

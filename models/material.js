@@ -1,6 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
 
 const materialSchema = mongoose.Schema({
+    number:Number,
     name:String,
 });
 

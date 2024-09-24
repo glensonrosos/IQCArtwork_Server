@@ -1,6 +1,7 @@
 import mongoose, { Schema } from 'mongoose';
 
 const defectSchema = mongoose.Schema({
+    number:Number,
     name:String,
 });
 

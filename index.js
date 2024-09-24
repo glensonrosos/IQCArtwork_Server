@@ -9,6 +9,10 @@ import materialRoutes from './routes/material.js';
 import supplierRoutes from './routes/supplier.js';
 import authRoutes from './routes/auth.js';
 import departmentRoutes from './routes/department.js';
+import areaRoutes from './routes/area.js';
+import defectRoutes from './routes/defect.js';
+import defectDataRoutes from './routes/defectData.js';
+import inspectionRoutes from './routes/inspection.js';
 
 const app = express();
 
@@ -20,7 +24,7 @@ app.use(cors());
 
 // Configure CORS
 app.use(cors({
-    origin: true, // Allow requests from any origin
+    origin: true, 
     methods: ['GET', 'POST', 'PUT', 'DELETE','PATCH'], // Specify the allowed HTTP methods
     allowedHeaders: ['Content-Type', 'Authorization'], // Specify the allowed headers
     credentials: true, // Enable credentials (e.g., cookies, authorization headers)
@@ -40,12 +44,16 @@ mongoose.connect(CONNECTION_URL,{useNewUrlParser:true, useUnifiedTopology:true})
     .catch((error) => console.log(error.message));
 
 
-app.use('/mm/buyers',buyerRoutes);
-app.use('/mm/materials',materialRoutes);
-app.use('/mm/suppliers',supplierRoutes);
-app.use('/mm/items',itemRoutes);
-app.use('/mm/auth',authRoutes);
-app.use('/mm/departments',departmentRoutes);
+app.use('/ia/buyers',buyerRoutes);
+app.use('/ia/materials',materialRoutes);
+app.use('/ia/suppliers',supplierRoutes);
+app.use('/ia/items',itemRoutes);
+app.use('/ia/auth',authRoutes);
+app.use('/ia/departments',departmentRoutes);
+app.use('/ia/areas',areaRoutes);
+app.use('/ia/defects',defectRoutes);
+app.use('/ia/defectDatas',defectDataRoutes);
+app.use('/ia/inspections',inspectionRoutes);
 
 
 // DOCKER

@@ -9,3 +9,14 @@ export const getBuyers = async (req,res)=>{
     }
 }
 
+export const createBuyer = async (req,res)=>{
+    const buyer = req.body;
+    try{
+        const newBuyer = await new Buyer(buyer);
+        await newBuyer.save();
+        res.status(201).json(buyer);
+    }catch(error){
+        res.status(404).json({message: error.message});
+    }
+}
+
