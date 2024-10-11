@@ -1,4 +1,6 @@
 import Inspection from "../models/inspection.js";
+import DefectData from "../models/defectData.js";
+
 import mongoose from "mongoose";
 import moment from 'moment';
 
@@ -76,6 +78,105 @@ export const getInspectionsBySearch = async (req, res) => {
     } catch (error) {
       res.status(404).json({ message: error.message });
     }
+  };
+
+  export const getExportReportList = async (req, res) => {
+    try {
+
+        console.log('getExportReportList called');
+
+        
+      const { itemcode, datestart, dateend, supplier, buyer, material} = req.body;
+  
+      const startOfDay = datestart ? moment(datestart).startOf('day').toDate() : null;
+      const endOfDay = dateend ? moment(dateend).endOf('day').toDate() : null;
+  
+      let query = {};
+  
+      if (itemcode) {
+        query['item.itemCode'] = { $regex: '.*' + itemcode + '.*', $options: 'i' }; 
+      }
+      if (datestart && dateend) {
+        query.date = { $gte: startOfDay, $lt: endOfDay }; 
+      } else if (datestart) {
+        query.date = { $gte: startOfDay }; 
+      } else if (dateend) {
+        query.date = { $lt: endOfDay }; 
+      }
+      if (supplier) {
+        query['supplier._id'] = supplier;
+      }
+      if (buyer) {
+        query['buyer._id'] = buyer;
+      }
+      if (material) {
+        query['material._id'] = material;
+      }
+  
+      const inspections = await Inspection.find(query).sort({ _id: -1 });
+
+      
+      // Create a map to store inspection row IDs
+      const inspectionRowIdMap = new Map();
+
+      // Create sequential row ID for each inspection
+      const inspectionsList = inspections.map((inspection, index) => {
+          const RowId = index + 1; // Row ID starts from 1 and increments
+          inspectionRowIdMap.set(inspection._id.toString(), RowId); // Map _id to Row ID
+          
+          // Reconstruct the inspection object with Row ID instead of _id
+          return {
+              RowId, // Row ID instead of _id
+              Date: moment(inspection.date).format('MM-DD-YYYY'),
+              Supplier: inspection.supplier.name,
+              ItemCode: inspection.item.itemCode,
+              ItemDescription: inspection.item.itemDescription,
+              Buyer: inspection.buyer.name,
+              Material: inspection.material.name,
+              Weight: inspection.weight,
+              DeliveryQty: inspection.deliveryQty,
+              TotalGoodQty: inspection.totalGoodQty,
+              TotalPullOutQty: inspection.totalPullOutQty,
+              FirstPass_Defect: inspection.firstPass.defectQty,
+              FirstPass_Good: inspection.firstPass.totalGoodQty,
+              FirstPass_PullOut: inspection.firstPass.totalPullOutQty,
+              SecondPass_Good: inspection.secondPass.totalGoodQty,
+              SecondPass_PullOut: inspection.secondPass.totalPullOutQty,
+              Unfinished: inspection.unfinished,
+          };
+      });
+
+      // Fetch DefectData that matches inspection IDs
+      const defectDatas = await DefectData.find({
+          inspectionId: { $in: inspections.map(i => i._id) }
+      }).sort({ inspectionId: -1, passType: -1 });
+
+     // Map DefectData using the Row ID from inspections
+      const defectDataList = defectDatas.flatMap(defect => {
+        const RowId = inspectionRowIdMap.get(defect.inspectionId.toString()); // Get the Row ID from the map
+        
+        return defect.defectDetails.map(detail => ({
+            RowId, // Use the Row ID instead of inspectionId
+            PassType: defect.passType,
+            DefectName: detail.defect.name, // Map each defect name
+            Area: detail.area.name, // Map each area name
+            MajorQty: detail.majorQty, // Map each majorQty
+            NumericData: detail.numericData, // Map each numericData
+        }));
+      });
+
+      if(inspectionsList.length === 0)
+        return res.status(200).json({ message:"export no",inspectionsList:[],defectDataList:[]});
+
+      return res.status(200).json({
+          message: "export list",
+          inspectionsList,
+          defectDataList
+      });
+
+  } catch (error) {
+      return res.status(404).json({ message: error.message });
+  }
   };
 
 export const createInspection = async (req,res)=>{

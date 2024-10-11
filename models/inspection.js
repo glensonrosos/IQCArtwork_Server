@@ -23,7 +23,7 @@ const inspectionSchema = mongoose.Schema({
         _id : Schema.Types.ObjectId,
         name:String,
     },
-    weight: Number,
+    weight: String,
     totalGoodQty: Number,
     totalPullOutQty: Number,
     firstPass:{

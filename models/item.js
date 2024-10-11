@@ -1,9 +1,9 @@
 import mongoose, { Schema } from 'mongoose';
 
 const itemSchema = mongoose.Schema({
-    number: { type: Number, required: false },
-    itemCode: { type: String, required: false},
-    itemDescription:String,
+    number: { type: Number, required: true },
+    itemCode: { type: String, required: true},
+    itemDescription:{ type: String, required: true, unique: true },
     weight:Number,
     buyer:String,
     material:String,
