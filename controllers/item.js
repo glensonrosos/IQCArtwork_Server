@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 export const getItems = async (req,res)=>{
     const {page} = req.query;
     try{
-        const LIMIT = 5 ;
+        const LIMIT = 50 ;
 
         //get the starting index of evert page;
         const startIndex = ( Number(page)-1 ) * LIMIT;
@@ -47,7 +47,6 @@ export const findItems = async (req, res) => {
     try {
         const items = await Item.find({ itemCode: { $regex: `^${itemCode}`, $options: 'i' } }); 
 
-        console.log(`findItem called with itemCode: ${itemCode}, results: ${JSON.stringify(items)}`);
         if (items.length > 0)
             return res.status(200).json({ items: items, message: "item found" });
         else
@@ -69,7 +68,6 @@ export const getItemById = async (req,res)=>{
     try{
         const item = await Item.findOne({_id:id});
 
-        console.log(`findItem called ${JSON.stringify(item)}`);
         if(item !== null)
             return res.status(200).json({item:item,message:"item found"});
         else

@@ -11,9 +11,13 @@ const inspectionSchema = mongoose.Schema({
         _id : Schema.Types.ObjectId,
         itemCode:String,
         itemDescription:String,
+        color:String,
     },
     deliveryQty: Number,
-    totalMinWork: Number,
+    totalMinWork:{
+        start:Date,
+        end:Date
+    },
     buyer:{
         _id : Schema.Types.ObjectId,
         supplierCode: String,
@@ -35,8 +39,10 @@ const inspectionSchema = mongoose.Schema({
         totalGoodQty: Number,
         totalPullOutQty: Number,
     },
+    emptyDefect:Boolean,
     remarks:String,
     unfinished:Number,
+    dateClosure:Date,
     createdAt:Date,
     updatedAt:Date,
     deletedAt:Date,

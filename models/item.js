@@ -5,6 +5,7 @@ const itemSchema = mongoose.Schema({
     itemCode: { type: String, required: true},
     itemDescription:{ type: String, required: true, unique: true },
     weight:Number,
+    color:String,
     buyer:String,
     material:String,
 });
