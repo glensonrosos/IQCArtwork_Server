@@ -85,117 +85,341 @@ export const getInspectionsBySearch = async (req, res) => {
 
   export const getExportReportList = async (req, res) => {
     try {
+        const { itemcode, color, datestart, dateend, supplier, buyer, material } = req.body;
 
-    
+        const startOfDay = datestart ? moment(datestart).startOf('day').toDate() : null;
+        const endOfDay = dateend ? moment(dateend).endOf('day').toDate() : null;
 
+        let query = {};
+
+        if (itemcode) {
+            query['item.itemCode'] = { $regex: '.*' + itemcode + '.*', $options: 'i' };
+        }
+        if (datestart && dateend) {
+            query.date = { $gte: startOfDay, $lt: endOfDay };
+        } else if (datestart) {
+            query.date = { $gte: startOfDay };
+        } else if (dateend) {
+            query.date = { $lt: endOfDay };
+        }
+        if (supplier && supplier.length > 0) {
+            // Assuming supplier is an array of supplier objects with _id properties
+            const supplierIds = supplier.map(s => s._id);
+            query['supplier._id'] = { $in: supplierIds };
+        }
+        if (buyer) {
+            query['buyer._id'] = buyer;
+        }
+        if (material) {
+            query['material._id'] = material;
+        }
+        if (color) {
+            query['item.color'] = { $regex: '.*' + color + '.*', $options: 'i' };
+        }
+
+        const inspections = await Inspection.find(query).sort({ _id: -1 });
+
+        const inspectionRowIdMap = new Map();
+        const inspectionsList = inspections.map((inspection, index) => {
+            const RowId = index + 1;
+            inspectionRowIdMap.set(inspection._id.toString(), RowId);
+
+            return {
+                RowId,
+                Date: moment(inspection.date).format('MM-DD-YYYY'),
+                Supplier: inspection.supplier.name,
+                ItemCode: inspection.item.itemCode,
+                ItemDescription: inspection.item.itemDescription,
+                ColorFinish: inspection.item.color,
+                Buyer: inspection.buyer.name,
+                Material: inspection.material.name,
+                Weight: inspection.weight,
+                DeliveryQty: inspection.deliveryQty,
+                TotalMinWork: `${moment(inspection.totalMinWork.start).format('hh:mm A')}-${moment(inspection.totalMinWork.end).format('hh:mm A')}`,
+                TotalGoodQty: inspection.totalGoodQty,
+                TotalPullOutQty: inspection.totalPullOutQty,
+                FirstPass_Defect: inspection.firstPass.defectQty,
+                FirstPass_Good: inspection.firstPass.totalGoodQty,
+                FirstPass_PullOut: inspection.firstPass.totalPullOutQty,
+                SecondPass_Good: inspection.secondPass.totalGoodQty,
+                SecondPass_PullOut: inspection.secondPass.totalPullOutQty,
+                Unfinished: inspection.unfinished,
+                DateClosure: moment(inspection.dateClosure).format('MM-DD-YYYY'),
+            };
+        });
+
+        const defectDatas = await DefectData.find({
+            'inspectionId.id': { $in: inspections.map(i => i._id) }
+        }).sort({ inspectionId: -1, passType: -1 });
+
+        const defectDataList = defectDatas.flatMap(defect => {
+            const RowId = inspectionRowIdMap.get(defect.inspectionId.toString());
+
+            return defect.defectDetails.map(detail => {
+
+                let newPassType = '';
+
+                if(defect.passType === 'firstPassDefect')
+                    newPassType = '1stP Defect'
+                else if(defect.passType === 'firstPassPullOut')
+                    newPassType = '1stP PullOut'
+                else if(defect.passType === 'secondPassPullOut')
+                    newPassType = '(2nd-P) PullOut'
+
+                return {
+                    RowId,
+                    PassType: newPassType,
+                    DefectName: detail.defect.name,
+                    Area: detail.area.name,
+                    MajorQty: detail.majorQty,
+                    NumericData: detail.numericData,
+                }
+            });
+        });
+
+        console.log(`
+            inspectionsList ${inspectionsList}
+            defectDataList ${defectDataList}
+        `);
+
+        if (inspectionsList.length === 0 || defectDataList.length === 0)
+            return res.status(200).json({ message: "export no", inspectionsList: [], defectDataList: [] });
+
+        return res.status(200).json({
+            message: "export list",
+            inspectionsList,
+            defectDataList
+        });
+
+    } catch (error) {
+        return res.status(404).json({ message: error.message });
+    }
+};
+
+export const getExportSumReport = async (req, res) => {
+    try {
+        const { itemcode, color, datestart, dateend, supplier, buyer, material } = req.body;
+
+        const startOfDay = datestart ? moment(datestart).startOf('day').toDate() : null;
+        const endOfDay = dateend ? moment(dateend).endOf('day').toDate() : null;
+
+        let query = {};
+
+        if (itemcode) {
+            query['item.itemCode'] = { $regex: '.*' + itemcode + '.*', $options: 'i' };
+        }
+        if (datestart && dateend) {
+            query.date = { $gte: startOfDay, $lt: endOfDay };
+        } else if (datestart) {
+            query.date = { $gte: startOfDay };
+        } else if (dateend) {
+            query.date = { $lt: endOfDay };
+        }
+        if (supplier && supplier.length > 0) {
+            // Assuming supplier is an array of supplier objects with _id properties
+            const supplierIds = supplier.map(s => s._id);
+            query['supplier._id'] = { $in: supplierIds };
+        }
+        if (buyer) {
+            query['buyer._id'] = buyer;
+        }
+        if (material) {
+            query['material._id'] = material;
+        }
+        if (color) {
+            query['item.color'] = { $regex: '.*' + color + '.*', $options: 'i' };
+        }
+
+        const inspections = await Inspection.find(query).sort({ _id: -1 });
+
+        if (inspections.length === 0) {
+            return res.status(200).json({ message: "export no", inspectionsSum: [] });
+        }
+
+        // Group and sum data
+        const inspectionMap = {};
         
-      const { itemcode,color, datestart, dateend, supplier, buyer, material} = req.body;
+        inspections.forEach((inspection, index) => {
+            const RowId = index + 1;
+            const itemCode = inspection.item.itemCode;
+            const supplierName = inspection.supplier.name;
+            const buyerName = inspection.buyer.name;
+            const materialName = inspection.material.name;
+            const key = `${itemCode}_${supplierName}_${buyerName}_${materialName}`; // Unique key based on itemCode, supplier, buyer, and material
 
-      console.log(`getExportReportList called ${JSON.stringify(req.body)}`);
-  
-      const startOfDay = datestart ? moment(datestart).startOf('day').toDate() : null;
-      const endOfDay = dateend ? moment(dateend).endOf('day').toDate() : null;
-  
-      let query = {};
-  
-      if (itemcode) {
-        query['item.itemCode'] = { $regex: '.*' + itemcode + '.*', $options: 'i' }; 
-      }
-      if (datestart && dateend) {
-        query.date = { $gte: startOfDay, $lt: endOfDay }; 
-      } else if (datestart) {
-        query.date = { $gte: startOfDay }; 
-      } else if (dateend) {
-        query.date = { $lt: endOfDay }; 
-      }
-      if (supplier) {
-        query['supplier._id'] = supplier;
-      }
-      if (buyer) {
-        query['buyer._id'] = buyer;
-      }
-      if (material) {
-        query['material._id'] = material;
-      }
-      if (color) {
-        query['item.color'] = { $regex: '.*' + color + '.*', $options: 'i' }; 
-      }
-  
-      const inspections = await Inspection.find(query).sort({ _id: -1 });
+            if (!inspectionMap[key]) {
+                inspectionMap[key] = {
+                    RowId,
+                    ItemCode: itemCode,
+                    ItemDescription: inspection.item.itemDescription,
+                    Supplier: supplierName,
+                    Buyer: buyerName,
+                    Material: materialName,
+                    DeliveryQty: 0,
+                    TotalGoodQty: 0,
+                    TotalPullOutQty: 0,
+                    FirstPass_Defect: 0,
+                    FirstPass_Good: 0,
+                    FirstPass_PullOut: 0,
+                    SecondPass_Good: 0,
+                    SecondPass_PullOut: 0,
+                    Unfinished: 0
+                };
+            }
 
-      
-      // Create a map to store inspection row IDs
-      const inspectionRowIdMap = new Map();
+            // Sum values
+            inspectionMap[key].DeliveryQty += inspection.deliveryQty || 0;
+            inspectionMap[key].TotalGoodQty += inspection.totalGoodQty || 0;
+            inspectionMap[key].TotalPullOutQty += inspection.totalPullOutQty || 0;
+            inspectionMap[key].FirstPass_Defect += inspection.firstPass?.defectQty || 0;
+            inspectionMap[key].FirstPass_Good += inspection.firstPass?.totalGoodQty || 0;
+            inspectionMap[key].FirstPass_PullOut += inspection.firstPass?.totalPullOutQty || 0;
+            inspectionMap[key].SecondPass_Good += inspection.secondPass?.totalGoodQty || 0;
+            inspectionMap[key].SecondPass_PullOut += inspection.secondPass?.totalPullOutQty || 0;
+            inspectionMap[key].Unfinished += inspection.unfinished ? 1 : 0;
+        });
 
-      // Create sequential row ID for each inspection
-      const inspectionsList = inspections.map((inspection, index) => {
-          const RowId = index + 1; // Row ID starts from 1 and increments
-          inspectionRowIdMap.set(inspection._id.toString(), RowId); // Map _id to Row ID
-          
-          // Reconstruct the inspection object with Row ID instead of _id
-          return {
-              RowId, // Row ID instead of _id
-              Date: moment(inspection.date).format('MM-DD-YYYY'),
-              Supplier: inspection.supplier.name,
-              ItemCode: inspection.item.itemCode,
-              ItemDescription: inspection.item.itemDescription,
-              ColorFinish: inspection.item.color,
-              Buyer: inspection.buyer.name,
-              Material: inspection.material.name,
-              Weight: inspection.weight,
-              DeliveryQty: inspection.deliveryQty,
-              TotalMinWork: `${moment(inspection.totalMinWork.start).format('hh:mm A')}-${moment(inspection.totalMinWork.end).format('hh:mm A')}`,
-              TotalGoodQty: inspection.totalGoodQty,
-              TotalPullOutQty: inspection.totalPullOutQty,
-              FirstPass_Defect: inspection.firstPass.defectQty,
-              FirstPass_Good: inspection.firstPass.totalGoodQty,
-              FirstPass_PullOut: inspection.firstPass.totalPullOutQty,
-              SecondPass_Good: inspection.secondPass.totalGoodQty,
-              SecondPass_PullOut: inspection.secondPass.totalPullOutQty,
-              Unfinished: inspection.unfinished,
-              DateClosure: moment(inspection.dateClosure).format('MM-DD-YYYY'),
-          };
-      });
+        // Convert the map to an array and sort by supplier name
+        const exportSumReport = Object.values(inspectionMap).sort((a, b) => a.Supplier.localeCompare(b.Supplier));
 
-      // Fetch DefectData that matches inspection IDs
-      const defectDatas = await DefectData.find({
-          inspectionId: { $in: inspections.map(i => i._id) }
-      }).sort({ inspectionId: -1, passType: -1 });
+        //console.log(` exportSumReport => ${JSON.stringify(exportSumReport)}`);
 
-     // Map DefectData using the Row ID from inspections
-      const defectDataList = defectDatas.flatMap(defect => {
-        const RowId = inspectionRowIdMap.get(defect.inspectionId.toString()); // Get the Row ID from the map
-        
-        return defect.defectDetails.map(detail => ({
-            RowId, // Use the Row ID instead of inspectionId
-            PassType: defect.passType,
-            DefectName: detail.defect.name, // Map each defect name
-            Area: detail.area.name, // Map each area name
-            MajorQty: detail.majorQty, // Map each majorQty
-            NumericData: detail.numericData, // Map each numericData
-        }));
-      });
+        return res.status(200).json({
+            message: "export sum",
+            exportSumReport,
+        });
 
-      console.log(`
-         inspectionsList ${inspectionsList}
+    } catch (error) {
+        return res.status(404).json({ message: error.message });
+    }
+};
 
-         defectDataList ${defectDataList}
-        `)
+export const getExportDefectsReport = async (req, res) => {
+    try {
+        const { itemcode, color, datestart, dateend, supplier, buyer, material } = req.body;
 
-      if(inspectionsList.length === 0 || defectDataList.length === 0)
-        return res.status(200).json({ message:"export no",inspectionsList:[],defectDataList:[]});
+        const startOfDay = datestart ? moment(datestart).startOf('day').toDate() : null;
+        const endOfDay = dateend ? moment(dateend).endOf('day').toDate() : null;
+
+        let query = {};
+
+        if (itemcode) {
+            query['item.itemCode'] = { $regex: '.*' + itemcode + '.*', $options: 'i' };
+        }
+        if (datestart && dateend) {
+            query.date = { $gte: startOfDay, $lt: endOfDay };
+        } else if (datestart) {
+            query.date = { $gte: startOfDay };
+        } else if (dateend) {
+            query.date = { $lt: endOfDay };
+        }
+        if (supplier && supplier.length > 0) {
+            const supplierIds = supplier.map(s => s._id);
+            query['supplier._id'] = { $in: supplierIds };
+        }
+        if (buyer) {
+            query['buyer._id'] = buyer;
+        }
+        if (material) {
+            query['material._id'] = material;
+        }
+        if (color) {
+            query['item.color'] = { $regex: '.*' + color + '.*', $options: 'i' };
+        }
+
+        const inspections = await Inspection.find(query).sort({ _id: -1 });
+
+        if (inspections.length === 0) {
+            return res.status(200).json({ message: "export no", inspectionsSum: [] });
+        }
+
+        // Get the inspection IDs
+        const inspectionIds = inspections.map(ins => ins._id);
+
+        // Aggregate `DefectData` based on `inspectionId.id` in `inspectionIds`
+        const defectDataAggregation = await DefectData.aggregate([
+            {
+                $match: {
+                    'inspectionId.id': { $in: inspectionIds }
+                }
+            },
+            {
+                $unwind: "$defectDetails"
+            },
+            {
+                $group: {
+                    _id: {
+                        defectName: "$defectDetails.defect.name",
+                        passType: "$passType"
+                    },
+                    totalMajorQty: { $sum: "$defectDetails.majorQty" }
+                }
+            },
+            {
+                $group: {
+                    _id: "$_id.defectName",
+                    defectData: {
+                        $push: {
+                            passType: "$_id.passType",
+                            totalMajorQty: "$totalMajorQty"
+                        }
+                    }
+                }
+            },
+            {
+                $addFields: {
+                    defectData: {
+                        $map: {
+                            input: ["firstPassDefect", "firstPassPullOut", "secondPassPullOut"],
+                            as: "passType",
+                            in: {
+                                passType: "$$passType",
+                                totalMajorQty: {
+                                    $let: {
+                                        vars: {
+                                            matchingDefect: {
+                                                $arrayElemAt: [
+                                                    {
+                                                        $filter: {
+                                                            input: "$defectData",
+                                                            as: "item",
+                                                            cond: { $eq: ["$$item.passType", "$$passType"] }
+                                                        }
+                                                    },
+                                                    0
+                                                ]
+                                            }
+                                        },
+                                        in: {
+                                            $ifNull: ["$$matchingDefect.totalMajorQty", 0]
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            {
+                $project: {
+                    _id: 0,
+                    defectName: "$_id",
+                    defectData: 1
+                }
+            }
+        ]);
+
+        return res.status(200).json({
+            message: "export defects",
+            exportDefectsReport: defectDataAggregation,
+        });
+
+    } catch (error) {
+        return res.status(404).json({ message: error.message });
+    }
+};
 
 
-      return res.status(200).json({
-          message: "export list",
-          inspectionsList,
-          defectDataList
-      });
-
-  } catch (error) {
-      return res.status(404).json({ message: error.message });
-  }
-  };
 
 export const createInspection = async (req,res)=>{
     const inspection = req.body;
@@ -264,7 +488,6 @@ export const editInspection = async (req,res) =>{
 
     if(!mongoose.Types.ObjectId.isValid(_id))
         return res.status(404).send('no item exist with that id');
-
     try{
         //
         let isDuplicateInspection = await Inspection.find({
@@ -279,11 +502,19 @@ export const editInspection = async (req,res) =>{
             return res.status(200).json({message:'edit duplicate'});
         }
         //
+
         const editedInspection = await Inspection.
             findByIdAndUpdate(_id,{date,supplier,item,deliveryQty,totalMinWork,buyer,material,weight,totalGoodQty,totalPullOutQty,
                 firstPass,secondPass,remarks,unfinished,dateClosure,editedBy,
                 updatedAt:new Date().toISOString(),
             },{new:true});
+
+        await DefectData.updateMany({'inspectionId.id':_id},{
+            inspectionId:{
+                id:_id,
+                date:date
+            }
+        },{new:true});
 
         res.json(editedInspection);
     }catch(error){

@@ -6,10 +6,12 @@ import mongoose from "mongoose";
 export const getDefectDatas = async (req, res) => {
     const { inspectionId, passType } = req.params;
     
+    console.log(`inspectionId => ${JSON.stringify(req.params)}`)
+
     try {
 
         // Find defect data based on inspectionId and passType
-        const defectDatas = await DefectData.findOne({inspectionId,passType});
+        const defectDatas = await DefectData.findOne({'inspectionId.id':inspectionId,passType});
         
         if (!defectDatas) {
             return res.status(200).json({defectDetails:[] });
@@ -29,13 +31,20 @@ export const createDefectData = async (req,res)=>{
     const defectData = req.body;
 
     try{
-        const checkExist = await DefectData.findOne({inspectionId:defectData.inspectionId,passType:defectData.passType});
+
+        const checkInspectionExist = await Inspection.findOne({_id:defectData.inspectionId});
+        if(!checkInspectionExist){
+            return res.status(404).json({message: "not exist"});
+        }
+
+        const checkExist = await DefectData.findOne({'inspectionId.id':defectData.inspectionId,passType:defectData.passType});
         if(checkExist){
             const updatedDefectData = await DefectData.findByIdAndUpdate(checkExist._id,{defectDetails:defectData.defectDetails,
                 createdAt:new Date().toISOString(),
                 updatedAt:new Date().toISOString(),
                 deletedAt:null,
                 editedBy:defectData.editedBy,
+                'inspectionId.date': checkInspectionExist.date
             },{new:true});
             return res.status(201).json(updatedDefectData);
         }else{
@@ -43,7 +52,12 @@ export const createDefectData = async (req,res)=>{
                 createdAt:new Date().toISOString(),
                 updatedAt:new Date().toISOString(),
                 deletedAt:null,
-                editedBy:defectData.editedBy});
+                editedBy:defectData.editedBy,
+                inspectionId:{
+                    id: checkInspectionExist._id,
+                    date: checkInspectionExist.date
+                }
+            });
             await newDefectData.save();
             return res.status(201).json(defectData);
         }
@@ -57,7 +71,7 @@ export const updateDefectData = async (req,res)=>{
     const {_id} = req.params;
 
     try{
-        const checkExist = await DefectData.findOne({inspectionId:_id});
+        const checkExist = await DefectData.findOne({'inspectionId.id':_id});
         if(checkExist){
             const updatedDefectData = await DefectData.findByIdAndUpdate(checkExist._id,{defectDetails:defectData.defectDetails},{new:true});
             return res.status(201).json(updatedDefectData);
@@ -71,8 +85,6 @@ export const checkEmptyDefect = async (req,res)=>{
 
     const {inspectionId} = req.body;
 
-    
-    
     let flag = false;
 
     try{
@@ -82,9 +94,9 @@ export const checkEmptyDefect = async (req,res)=>{
 
         if(checkExist){
 
-            const defectFirstDefect = await DefectData.findOne({inspectionId,passType:'firstPassDefect'});
-            const defectFirstPullOut = await DefectData.findOne({inspectionId,passType:'firstPassPullOut'});
-            const defectSecondPullOut = await DefectData.findOne({inspectionId,passType:'secondPassPullOut'});
+            const defectFirstDefect = await DefectData.findOne({'inspectionId.id':inspectionId,passType:'firstPassDefect'});
+            const defectFirstPullOut = await DefectData.findOne({'inspectionId.id':inspectionId,passType:'firstPassPullOut'});
+            const defectSecondPullOut = await DefectData.findOne({'inspectionId.id':inspectionId,passType:'secondPassPullOut'});
            
           
             let firstDefectFlag = parseInt(checkExist.firstPass.defectQty);
@@ -137,17 +149,32 @@ export const checkEmptyDefect = async (req,res)=>{
                     break;
             }
 
-            await Inspection.findByIdAndUpdate(inspectionId,{emptyDefect:flag},{new:true});
-
             console.log(` flag => ${flag}
-                \n ${firstDefectFlag} firstDefectFlag ${defectFirstDefect}
-                \n ${firstPullOutFlag}  firstPullOutFlag ${defectFirstPullOut}
-                 \n ${secondPullOutFlag} secondPullOutFlag ${defectSecondPullOut}
+                \n ${firstDefectFlag ? 1 : 0} firstDefectFlag ${defectFirstDefect?.defectDetails[0]?.id ? 1 : 0}
+                \n ${firstPullOutFlag ? 1 : 0}  firstPullOutFlag ${defectFirstPullOut?.defectDetails[0]?.id ? 1 : 0}
+                 \n ${secondPullOutFlag ? 1 : 0} secondPullOutFlag ${defectSecondPullOut?.defectDetails[0]?.id ? 1 : 0}
                 `);
 
-            return res.status(201).json({message: 'found'});
+            await Inspection.findByIdAndUpdate({_id:inspectionId},{emptyDefect:flag},{new:true});
+
+
+            return res.status(201).json({message: 'found',counting:{
+                firstDefect: firstDefectFlag ? 1 : 0,
+                firstDefectRows: defectFirstDefect?.defectDetails[0]?.id ? 1 : 0,
+                firstPullOut: firstPullOutFlag ? 1 : 0,
+                firstPullOutRows: defectFirstPullOut?.defectDetails[0]?.id ? 1 : 0,
+                secondPullOut: secondPullOutFlag ? 1 : 0,
+                secondPullOutRows: defectSecondPullOut?.defectDetails[0]?.id ? 1 : 0
+            }});
         }
-        return res.status(201).json({message: 'no found',flag});
+        return res.status(201).json({message: 'no found',flag,counting:{
+            firstDefect: firstDefectFlag ? 1 : 0,
+            firstDefectRows: defectFirstDefect?.defectDetails[0]?.id ? 1 : 0,
+            firstPullOut: firstPullOutFlag ? 1 : 0,
+            firstPullOutRows: defectFirstPullOut?.defectDetails[0]?.id ? 1 : 0,
+            secondPullOut: secondPullOutFlag ? 1 : 0,
+            secondPullOutRows: defectSecondPullOut?.defectDetails[0]?.id ? 1 : 0
+        }});
     }catch(error){
         res.status(404).json({message: error.message});
     }

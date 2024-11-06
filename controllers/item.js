@@ -45,7 +45,7 @@ export const findItems = async (req, res) => {
 
     const { itemCode } = req.body;
     try {
-        const items = await Item.find({ itemCode: { $regex: `^${itemCode}`, $options: 'i' } }); 
+        const items = await Item.find({ itemCode: { $regex: '.*' + itemCode + '.*', $options: 'i' } }); 
 
         if (items.length > 0)
             return res.status(200).json({ items: items, message: "item found" });

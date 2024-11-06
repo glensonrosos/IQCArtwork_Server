@@ -2,9 +2,9 @@ import mongoose, { Schema } from 'mongoose';
 
 const defectDataSchema = mongoose.Schema({
     inspectionId:{
-      type: Schema.Types.ObjectId,
-      required: true
-    },
+      id: Schema.Types.ObjectId,
+      date:Date,
+  },
     passType: {
         type: String,
         enum: ['firstPassDefect', 'firstPassPullOut', 'secondPassPullOut'],
