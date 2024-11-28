@@ -6,7 +6,6 @@ import mongoose from "mongoose";
 export const getDefectDatas = async (req, res) => {
     const { inspectionId, passType } = req.params;
     
-    console.log(`inspectionId => ${JSON.stringify(req.params)}`)
 
     try {
 
@@ -85,12 +84,10 @@ export const checkEmptyDefect = async (req,res)=>{
 
     const {inspectionId} = req.body;
 
-    let flag = false;
+    console.log(`inspectionId => ${inspectionId}`);
 
     try{
         const checkExist = await Inspection.findOne({_id:inspectionId});
-
-        // console.log(` checkEmptyDefect called with ${JSON.stringify(checkExist)}`);
 
         if(checkExist){
 
@@ -103,59 +100,77 @@ export const checkEmptyDefect = async (req,res)=>{
             let firstPullOutFlag = parseInt(checkExist.firstPass.totalPullOutQty);
             let secondPullOutFlag = parseInt(checkExist.secondPass.totalPullOutQty);
 
+            let firstDefectMaxMajorQty = 0;
+            let firstPullOutMaxMajorQty = 0;
+            let secondPullOutMaxMajorQty = 0;
 
             switch (true) {
                 case true:
                     if(firstDefectFlag > 0){
                         if(defectFirstDefect == null){
-                            flag = true;
-                            break;
-                        }else if(defectFirstDefect.defectDetails[0])
-                            flag = false;
-                        else{
-                            flag = true;
-                            break;
+                            firstDefectMaxMajorQty = 1;
+                        }else if(defectFirstDefect?.defectDetails[0]){
+                            firstDefectMaxMajorQty = Math.max(...defectFirstDefect?.defectDetails.map(detail => detail.majorQty));
+                           
+                            if(firstDefectMaxMajorQty > firstDefectFlag)
+                                firstDefectMaxMajorQty = 1;
+                            else
+                                firstDefectMaxMajorQty = 0;
                         }
-                    }
-                   
+                        else{
+                            firstDefectMaxMajorQty = 1;
+                        }
+                    }else if( firstDefectFlag == 0 && defectFirstDefect?.defectDetails[0])
+                           firstDefectMaxMajorQty = 1;
+                    
                 case true:
                     if(firstPullOutFlag > 0){
-                        if(defectFirstPullOut == null){
-                            flag = true;
-                            break;
-                        }else if(defectFirstPullOut.defectDetails[0])
-                            flag = false;
-                        else{
-                            flag = true;
-                            break;
+                        if(!defectFirstPullOut?.defectDetails[0]){
+                            firstPullOutMaxMajorQty = 1;
+                        }else if(defectFirstPullOut?.defectDetails[0]){
+                            firstPullOutMaxMajorQty = Math.max(...defectFirstPullOut?.defectDetails.map(detail => detail.majorQty));
+                           
+                            if(firstPullOutMaxMajorQty > firstPullOutFlag)
+                                firstPullOutMaxMajorQty = 1;
+                            else
+                                firstPullOutMaxMajorQty = 0;
                         }
-                    }
-                   
+                        else{
+                                firstPullOutMaxMajorQty = 1;
+                        }
+                    }else if( firstPullOutFlag == 0 && defectFirstPullOut?.defectDetails[0])
+                        firstPullOutMaxMajorQty = 1;
+
                 case true:
                     if(secondPullOutFlag > 0){
                         if(defectSecondPullOut == null){
-                            flag = true;
-                            break;
-                        }else if(defectSecondPullOut.defectDetails[0])
-                            flag = false;
-                        else{
-                            flag = true;
-                            break;
+                            secondPullOutMaxMajorQty = 1;
+                        }else if(defectSecondPullOut?.defectDetails[0]){
+                            secondPullOutMaxMajorQty = Math.max(...defectSecondPullOut?.defectDetails.map(detail => detail.majorQty));
+                          
+                            if(secondPullOutMaxMajorQty > secondPullOutFlag)
+                                secondPullOutMaxMajorQty = 1;
+                            else
+                                secondPullOutMaxMajorQty = 0;
                         }
-                    }
-                    
+                        else{
+                            secondPullOutMaxMajorQty = 1;
+                        }
+                    }else if( secondPullOutFlag == 0 && defectSecondPullOut?.defectDetails[0])
+                        secondPullOutMaxMajorQty = 1;
+
                 default:
-                    // Default case if no action matches
                     break;
             }
 
-            console.log(` flag => ${flag}
-                \n ${firstDefectFlag ? 1 : 0} firstDefectFlag ${defectFirstDefect?.defectDetails[0]?.id ? 1 : 0}
-                \n ${firstPullOutFlag ? 1 : 0}  firstPullOutFlag ${defectFirstPullOut?.defectDetails[0]?.id ? 1 : 0}
-                 \n ${secondPullOutFlag ? 1 : 0} secondPullOutFlag ${defectSecondPullOut?.defectDetails[0]?.id ? 1 : 0}
-                `);
+        
 
-            await Inspection.findByIdAndUpdate({_id:inspectionId},{emptyDefect:flag},{new:true});
+
+            await Inspection.findByIdAndUpdate({_id:inspectionId},{passIssues:{
+                firstDefect:firstDefectMaxMajorQty,
+                firstPullOut:firstPullOutMaxMajorQty,
+                secondPullOut:secondPullOutMaxMajorQty
+            }},{new:true});
 
 
             return res.status(201).json({message: 'found',counting:{
@@ -167,15 +182,18 @@ export const checkEmptyDefect = async (req,res)=>{
                 secondPullOutRows: defectSecondPullOut?.defectDetails[0]?.id ? 1 : 0
             }});
         }
+
         return res.status(201).json({message: 'no found',flag,counting:{
-            firstDefect: firstDefectFlag ? 1 : 0,
-            firstDefectRows: defectFirstDefect?.defectDetails[0]?.id ? 1 : 0,
-            firstPullOut: firstPullOutFlag ? 1 : 0,
-            firstPullOutRows: defectFirstPullOut?.defectDetails[0]?.id ? 1 : 0,
-            secondPullOut: secondPullOutFlag ? 1 : 0,
-            secondPullOutRows: defectSecondPullOut?.defectDetails[0]?.id ? 1 : 0
+            firstDefect: 0,
+            firstDefectRows: 0,
+            firstPullOut: 0,
+            firstPullOutRows: 0,
+            secondPullOut:  0,
+            secondPullOutRows: 0
         }});
+        
     }catch(error){
+        console.log(error)
         res.status(404).json({message: error.message});
     }
 }

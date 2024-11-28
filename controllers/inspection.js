@@ -81,9 +81,9 @@ export const getInspectionsBySearch = async (req, res) => {
     } catch (error) {
       res.status(404).json({ message: error.message });
     }
-  };
+};
 
-  export const getExportReportList = async (req, res) => {
+export const getExportReportList = async (req, res) => {
     try {
         const { itemcode, color, datestart, dateend, supplier, buyer, material } = req.body;
 
@@ -92,9 +92,17 @@ export const getInspectionsBySearch = async (req, res) => {
 
         let query = {};
 
-        if (itemcode) {
-            query['item.itemCode'] = { $regex: '.*' + itemcode + '.*', $options: 'i' };
+        // Handle itemcode as an array
+        if (itemcode && itemcode.length > 0) {
+            query['item.itemCode'] = { $in: itemcode.map(code => new RegExp('.*' + code + '.*', 'i')) };
         }
+
+        // Handle color as an array
+        if (color && color.length > 0) {
+            query['item.color'] = { $in: color.map(c => new RegExp('.*' + c + '.*', 'i')) };
+        }
+
+        // Handle date range
         if (datestart && dateend) {
             query.date = { $gte: startOfDay, $lt: endOfDay };
         } else if (datestart) {
@@ -102,19 +110,21 @@ export const getInspectionsBySearch = async (req, res) => {
         } else if (dateend) {
             query.date = { $lt: endOfDay };
         }
+
+        // Handle supplier filtering
         if (supplier && supplier.length > 0) {
-            // Assuming supplier is an array of supplier objects with _id properties
             const supplierIds = supplier.map(s => s._id);
             query['supplier._id'] = { $in: supplierIds };
         }
+
+        // Handle buyer
         if (buyer) {
             query['buyer._id'] = buyer;
         }
+
+        // Handle material
         if (material) {
             query['material._id'] = material;
-        }
-        if (color) {
-            query['item.color'] = { $regex: '.*' + color + '.*', $options: 'i' };
         }
 
         const inspections = await Inspection.find(query).sort({ _id: -1 });
@@ -135,7 +145,7 @@ export const getInspectionsBySearch = async (req, res) => {
                 Material: inspection.material.name,
                 Weight: inspection.weight,
                 DeliveryQty: inspection.deliveryQty,
-                TotalMinWork: `${moment(inspection.totalMinWork.start).format('hh:mm A')}-${moment(inspection.totalMinWork.end).format('hh:mm A')}`,
+                TotalMinWork: `${moment(inspection.totalMinWork.start, "HH:mm").format("hh:mm A")}-${moment(inspection.totalMinWork.end, "HH:mm").format("hh:mm A")}`,
                 TotalGoodQty: inspection.totalGoodQty,
                 TotalPullOutQty: inspection.totalPullOutQty,
                 FirstPass_Defect: inspection.firstPass.defectQty,
@@ -144,27 +154,27 @@ export const getInspectionsBySearch = async (req, res) => {
                 SecondPass_Good: inspection.secondPass.totalGoodQty,
                 SecondPass_PullOut: inspection.secondPass.totalPullOutQty,
                 Unfinished: inspection.unfinished,
-                DateClosure: moment(inspection.dateClosure).format('MM-DD-YYYY'),
+                DateClosure: moment(inspection.dateClosure).isValid() ? moment(inspection.dateClosure).format('MM-DD-YYYY') : 'NA'
             };
         });
 
+        // Fetch defect data with appropriate mapping
         const defectDatas = await DefectData.find({
             'inspectionId.id': { $in: inspections.map(i => i._id) }
-        }).sort({ inspectionId: -1, passType: -1 });
+        }).sort({ 'inspectionId.id': -1, passType: -1 });
 
         const defectDataList = defectDatas.flatMap(defect => {
-            const RowId = inspectionRowIdMap.get(defect.inspectionId.toString());
+            const RowId = inspectionRowIdMap.get(defect.inspectionId.id.toString());
 
             return defect.defectDetails.map(detail => {
-
                 let newPassType = '';
-
-                if(defect.passType === 'firstPassDefect')
-                    newPassType = '1stP Defect'
-                else if(defect.passType === 'firstPassPullOut')
-                    newPassType = '1stP PullOut'
-                else if(defect.passType === 'secondPassPullOut')
-                    newPassType = '(2nd-P) PullOut'
+                if (defect.passType === 'firstPassDefect') {
+                    newPassType = '1stP Defect';
+                } else if (defect.passType === 'firstPassPullOut') {
+                    newPassType = '1stP PullOut';
+                } else if (defect.passType === 'secondPassPullOut') {
+                    newPassType = '(2nd-P) PullOut';
+                }
 
                 return {
                     RowId,
@@ -173,26 +183,28 @@ export const getInspectionsBySearch = async (req, res) => {
                     Area: detail.area.name,
                     MajorQty: detail.majorQty,
                     NumericData: detail.numericData,
-                }
+                };
             });
         });
 
         console.log(`
-            inspectionsList ${inspectionsList}
-            defectDataList ${defectDataList}
+            inspectionsList ${JSON.stringify(inspectionsList, null, 2)}
+            defectDataList ${JSON.stringify(defectDataList, null, 2)}
         `);
 
-        if (inspectionsList.length === 0 || defectDataList.length === 0)
+        if (inspectionsList.length === 0 && defectDataList.length === 0) {
             return res.status(200).json({ message: "export no", inspectionsList: [], defectDataList: [] });
+        }
 
         return res.status(200).json({
             message: "export list",
             inspectionsList,
-            defectDataList
+            defectDataList,
         });
 
     } catch (error) {
-        return res.status(404).json({ message: error.message });
+        console.error(error);
+        return res.status(500).json({ message: error.message });
     }
 };
 
@@ -205,9 +217,17 @@ export const getExportSumReport = async (req, res) => {
 
         let query = {};
 
-        if (itemcode) {
-            query['item.itemCode'] = { $regex: '.*' + itemcode + '.*', $options: 'i' };
+        // Handle itemcode as an array
+        if (itemcode && itemcode.length > 0) {
+            query['item.itemCode'] = { $in: itemcode.map(code => new RegExp('.*' + code + '.*', 'i')) };
         }
+
+        // Handle color as an array
+        if (color && color.length > 0) {
+            query['item.color'] = { $in: color.map(c => new RegExp('.*' + c + '.*', 'i')) };
+        }
+
+        // Handle date range
         if (datestart && dateend) {
             query.date = { $gte: startOfDay, $lt: endOfDay };
         } else if (datestart) {
@@ -215,20 +235,23 @@ export const getExportSumReport = async (req, res) => {
         } else if (dateend) {
             query.date = { $lt: endOfDay };
         }
+
+        // Handle supplier filtering
         if (supplier && supplier.length > 0) {
-            // Assuming supplier is an array of supplier objects with _id properties
             const supplierIds = supplier.map(s => s._id);
             query['supplier._id'] = { $in: supplierIds };
         }
+
+        // Handle buyer
         if (buyer) {
             query['buyer._id'] = buyer;
         }
+
+        // Handle material
         if (material) {
             query['material._id'] = material;
         }
-        if (color) {
-            query['item.color'] = { $regex: '.*' + color + '.*', $options: 'i' };
-        }
+
 
         const inspections = await Inspection.find(query).sort({ _id: -1 });
 
@@ -252,6 +275,7 @@ export const getExportSumReport = async (req, res) => {
                     RowId,
                     ItemCode: itemCode,
                     ItemDescription: inspection.item.itemDescription,
+                    ColorFinish: inspection.item.color,
                     Supplier: supplierName,
                     Buyer: buyerName,
                     Material: materialName,
@@ -276,17 +300,255 @@ export const getExportSumReport = async (req, res) => {
             inspectionMap[key].FirstPass_PullOut += inspection.firstPass?.totalPullOutQty || 0;
             inspectionMap[key].SecondPass_Good += inspection.secondPass?.totalGoodQty || 0;
             inspectionMap[key].SecondPass_PullOut += inspection.secondPass?.totalPullOutQty || 0;
-            inspectionMap[key].Unfinished += inspection.unfinished ? 1 : 0;
+            inspectionMap[key].Unfinished += inspection.unfinished || 0;
         });
 
         // Convert the map to an array and sort by supplier name
         const exportSumReport = Object.values(inspectionMap).sort((a, b) => a.Supplier.localeCompare(b.Supplier));
 
-        //console.log(` exportSumReport => ${JSON.stringify(exportSumReport)}`);
-
         return res.status(200).json({
             message: "export sum",
             exportSumReport,
+        });
+
+    } catch (error) {
+        return res.status(404).json({ message: error.message });
+    }
+};
+
+export const getExportSuppliersSumReport = async (req, res) => {
+    try {
+
+        const { itemcode, color, datestart, dateend, supplier, buyer, material } = req.body;
+
+        const startOfDay = datestart ? moment(datestart).startOf('day').toDate() : null;
+        const endOfDay = dateend ? moment(dateend).endOf('day').toDate() : null;
+
+        let query = {};
+
+        // Handle itemcode as an array
+        if (itemcode && itemcode.length > 0) {
+            query['item.itemCode'] = { $in: itemcode.map(code => new RegExp('.*' + code + '.*', 'i')) };
+        }
+
+        // Handle color as an array
+        if (color && color.length > 0) {
+            query['item.color'] = { $in: color.map(c => new RegExp('.*' + c + '.*', 'i')) };
+        }
+
+        // Handle date range
+        if (datestart && dateend) {
+            query.date = { $gte: startOfDay, $lt: endOfDay };
+        } else if (datestart) {
+            query.date = { $gte: startOfDay };
+        } else if (dateend) {
+            query.date = { $lt: endOfDay };
+        }
+
+        // Handle supplier filtering
+        if (supplier && supplier.length > 0) {
+            const supplierIds = supplier.map(s => s._id);
+            query['supplier._id'] = { $in: supplierIds };
+        }
+
+        // Handle buyer
+        if (buyer) {
+            query['buyer._id'] = buyer;
+        }
+
+        // Handle material
+        if (material) {
+            query['material._id'] = material;
+        }
+
+
+        const inspections = await Inspection.find(query).sort({ _id: -1 });
+
+        if (inspections.length === 0) {
+            return res.status(200).json({ message: "export no", exportSuppliersSumReport: [] });
+        }
+
+        // Group and sum data
+        const inspectionMap = {};
+        
+        inspections.forEach((inspection, index) => {
+            const RowId = index + 1;
+            const supplierName = inspection.supplier.name;
+            const key = `${supplierName}`; // Unique key based on itemCode, supplier, buyer, and material
+
+            if (!inspectionMap[key]) {
+                inspectionMap[key] = {
+                    RowId,
+                    Supplier: supplierName,
+                    DeliveryQty: 0,
+                    TotalGoodQty: 0,
+                    TotalPullOutQty: 0,
+                    FirstPass_Defect: 0,
+                    FirstPass_Good: 0,
+                    FirstPass_PullOut: 0,
+                    SecondPass_Good: 0,
+                    SecondPass_PullOut: 0,
+                    Unfinished: 0
+                };
+            }
+
+            // Sum values
+            inspectionMap[key].DeliveryQty += inspection.deliveryQty || 0;
+            inspectionMap[key].TotalGoodQty += inspection.totalGoodQty || 0;
+            inspectionMap[key].TotalPullOutQty += inspection.totalPullOutQty || 0;
+            inspectionMap[key].FirstPass_Defect += inspection.firstPass?.defectQty || 0;
+            inspectionMap[key].FirstPass_Good += inspection.firstPass?.totalGoodQty || 0;
+            inspectionMap[key].FirstPass_PullOut += inspection.firstPass?.totalPullOutQty || 0;
+            inspectionMap[key].SecondPass_Good += inspection.secondPass?.totalGoodQty || 0;
+            inspectionMap[key].SecondPass_PullOut += inspection.secondPass?.totalPullOutQty || 0;
+            inspectionMap[key].Unfinished += inspection.unfinished || 0;
+        });
+
+        // Convert the map to an array and sort by supplier name
+        const exportSuppliersSumReport = Object.values(inspectionMap).sort((a, b) => a.Supplier.localeCompare(b.Supplier));
+
+         // Extract unique rows from inspections
+         const uniqueAffectedRows = inspections.map(ins => ({
+          itemCode: ins.item?.itemCode || "",
+          color: ins.item?.color || "",
+          supplier: ins.supplier?.name || "",
+          buyer: ins.buyer?.name || "",
+          material: ins.material?.name || ""
+      })).filter((row, index, self) => 
+          index === self.findIndex(r => 
+              r.itemCode === row.itemCode &&
+              r.color === row.color &&
+              r.supplier === row.supplier &&
+              r.buyer === row.buyer &&
+              r.material === row.material
+          )
+      );
+
+        return res.status(200).json({
+            message: "export suppliers sum",
+            exportSuppliersSumReport,
+            affectedRowsInspection: uniqueAffectedRows
+        });
+
+    } catch (error) {
+        return res.status(404).json({ message: error.message });
+    }
+};
+
+export const getExportItemsSumReport = async (req, res) => {
+    try {
+        const { itemcode, color, datestart, dateend, supplier, buyer, material } = req.body;
+
+        const startOfDay = datestart ? moment(datestart).startOf('day').toDate() : null;
+        const endOfDay = dateend ? moment(dateend).endOf('day').toDate() : null;
+
+        let query = {};
+
+        // Handle itemcode as an array
+        if (itemcode && itemcode.length > 0) {
+            query['item.itemCode'] = { $in: itemcode.map(code => new RegExp('.*' + code + '.*', 'i')) };
+        }
+
+        // Handle color as an array
+        if (color && color.length > 0) {
+            query['item.color'] = { $in: color.map(c => new RegExp('.*' + c + '.*', 'i')) };
+        }
+
+        // Handle date range
+        if (datestart && dateend) {
+            query.date = { $gte: startOfDay, $lt: endOfDay };
+        } else if (datestart) {
+            query.date = { $gte: startOfDay };
+        } else if (dateend) {
+            query.date = { $lt: endOfDay };
+        }
+
+        // Handle supplier filtering
+        if (supplier && supplier.length > 0) {
+            const supplierIds = supplier.map(s => s._id);
+            query['supplier._id'] = { $in: supplierIds };
+        }
+
+        // Handle buyer
+        if (buyer) {
+            query['buyer._id'] = buyer;
+        }
+
+        // Handle material
+        if (material) {
+            query['material._id'] = material;
+        }
+
+
+        const inspections = await Inspection.find(query).sort({ _id: -1 });
+
+        if (inspections.length === 0) {
+            return res.status(200).json({ message: "export no", exportItemsSumReport: [] });
+        }
+
+        // Group and sum data
+        const inspectionMap = {};
+        
+        inspections.forEach((inspection, index) => {
+            const RowId = index + 1;
+            const itemCode = inspection.item.itemCode;
+            const key = `${itemCode}`; // Unique key based on itemCode, supplier, buyer, and material
+
+            if (!inspectionMap[key]) {
+                inspectionMap[key] = {
+                    RowId,
+                    ItemCode: itemCode,
+                    ItemDescription: inspection.item.itemDescription,
+                    ColorFinish: inspection.item.color,
+                    DeliveryQty: 0,
+                    TotalGoodQty: 0,
+                    TotalPullOutQty: 0,
+                    FirstPass_Defect: 0,
+                    FirstPass_Good: 0,
+                    FirstPass_PullOut: 0,
+                    SecondPass_Good: 0,
+                    SecondPass_PullOut: 0,
+                    Unfinished: 0
+                };
+            }
+
+            // Sum values
+            inspectionMap[key].DeliveryQty += inspection.deliveryQty || 0;
+            inspectionMap[key].TotalGoodQty += inspection.totalGoodQty || 0;
+            inspectionMap[key].TotalPullOutQty += inspection.totalPullOutQty || 0;
+            inspectionMap[key].FirstPass_Defect += inspection.firstPass?.defectQty || 0;
+            inspectionMap[key].FirstPass_Good += inspection.firstPass?.totalGoodQty || 0;
+            inspectionMap[key].FirstPass_PullOut += inspection.firstPass?.totalPullOutQty || 0;
+            inspectionMap[key].SecondPass_Good += inspection.secondPass?.totalGoodQty || 0;
+            inspectionMap[key].SecondPass_PullOut += inspection.secondPass?.totalPullOutQty || 0;
+            inspectionMap[key].Unfinished += inspection.unfinished || 0;
+        });
+
+        // Convert the map to an array and sort by supplier name
+        const exportItemsSumReport = Object.values(inspectionMap).sort((a, b) => a.ItemCode.localeCompare(b.ItemCode));
+
+
+           // Extract unique rows from inspections
+           const uniqueAffectedRows = inspections.map(ins => ({
+            itemCode: ins.item?.itemCode || "",
+            color: ins.item?.color || "",
+            supplier: ins.supplier?.name || "",
+            buyer: ins.buyer?.name || "",
+            material: ins.material?.name || ""
+        })).filter((row, index, self) => 
+            index === self.findIndex(r => 
+                r.itemCode === row.itemCode &&
+                r.color === row.color &&
+                r.supplier === row.supplier &&
+                r.buyer === row.buyer &&
+                r.material === row.material
+            )
+        );
+
+        return res.status(200).json({
+            message: "export items sum",
+            exportItemsSumReport,
+            affectedRowsInspection: uniqueAffectedRows
         });
 
     } catch (error) {
@@ -303,9 +565,17 @@ export const getExportDefectsReport = async (req, res) => {
 
         let query = {};
 
-        if (itemcode) {
-            query['item.itemCode'] = { $regex: '.*' + itemcode + '.*', $options: 'i' };
+        // Handle itemcode as an array
+        if (itemcode && itemcode.length > 0) {
+            query['item.itemCode'] = { $in: itemcode.map(code => new RegExp('.*' + code + '.*', 'i')) };
         }
+
+        // Handle color as an array
+        if (color && color.length > 0) {
+            query['item.color'] = { $in: color.map(c => new RegExp('.*' + c + '.*', 'i')) };
+        }
+
+        // Handle date range
         if (datestart && dateend) {
             query.date = { $gte: startOfDay, $lt: endOfDay };
         } else if (datestart) {
@@ -313,24 +583,28 @@ export const getExportDefectsReport = async (req, res) => {
         } else if (dateend) {
             query.date = { $lt: endOfDay };
         }
+
+        // Handle supplier filtering
         if (supplier && supplier.length > 0) {
             const supplierIds = supplier.map(s => s._id);
             query['supplier._id'] = { $in: supplierIds };
         }
+
+        // Handle buyer
         if (buyer) {
             query['buyer._id'] = buyer;
         }
+
+        // Handle material
         if (material) {
             query['material._id'] = material;
         }
-        if (color) {
-            query['item.color'] = { $regex: '.*' + color + '.*', $options: 'i' };
-        }
+
 
         const inspections = await Inspection.find(query).sort({ _id: -1 });
 
         if (inspections.length === 0) {
-            return res.status(200).json({ message: "export no", inspectionsSum: [] });
+            return res.status(200).json({ message: "export no", inspectionsSum: [],affectedRows:[] });
         }
 
         // Get the inspection IDs
@@ -350,6 +624,7 @@ export const getExportDefectsReport = async (req, res) => {
                 $group: {
                     _id: {
                         defectName: "$defectDetails.defect.name",
+                        areaName: "$defectDetails.area.name",
                         passType: "$passType"
                     },
                     totalMajorQty: { $sum: "$defectDetails.majorQty" }
@@ -357,8 +632,11 @@ export const getExportDefectsReport = async (req, res) => {
             },
             {
                 $group: {
-                    _id: "$_id.defectName",
-                    defectData: {
+                    _id: {
+                        defectName: "$_id.defectName",
+                        areaName: "$_id.areaName"
+                    },
+                    passTypeData: {
                         $push: {
                             passType: "$_id.passType",
                             totalMajorQty: "$totalMajorQty"
@@ -367,57 +645,104 @@ export const getExportDefectsReport = async (req, res) => {
                 }
             },
             {
-                $addFields: {
-                    defectData: {
-                        $map: {
-                            input: ["firstPassDefect", "firstPassPullOut", "secondPassPullOut"],
-                            as: "passType",
-                            in: {
-                                passType: "$$passType",
-                                totalMajorQty: {
-                                    $let: {
-                                        vars: {
-                                            matchingDefect: {
-                                                $arrayElemAt: [
-                                                    {
-                                                        $filter: {
-                                                            input: "$defectData",
-                                                            as: "item",
-                                                            cond: { $eq: ["$$item.passType", "$$passType"] }
-                                                        }
-                                                    },
-                                                    0
-                                                ]
+                $project: {
+                    _id: 0,
+                    defectName: "$_id.defectName",
+                    areaName: "$_id.areaName",
+                    firstPassDefect: {
+                        $let: {
+                            vars: {
+                                match: {
+                                    $arrayElemAt: [
+                                        {
+                                            $filter: {
+                                                input: "$passTypeData",
+                                                as: "data",
+                                                cond: { $eq: ["$$data.passType", "firstPassDefect"] }
                                             }
                                         },
-                                        in: {
-                                            $ifNull: ["$$matchingDefect.totalMajorQty", 0]
-                                        }
-                                    }
+                                        0
+                                    ]
                                 }
-                            }
+                            },
+                            in: { $ifNull: ["$$match.totalMajorQty", 0] }
+                        }
+                    },
+                    firstPassPullOut: {
+                        $let: {
+                            vars: {
+                                match: {
+                                    $arrayElemAt: [
+                                        {
+                                            $filter: {
+                                                input: "$passTypeData",
+                                                as: "data",
+                                                cond: { $eq: ["$$data.passType", "firstPassPullOut"] }
+                                            }
+                                        },
+                                        0
+                                    ]
+                                }
+                            },
+                            in: { $ifNull: ["$$match.totalMajorQty", 0] }
+                        }
+                    },
+                    secondPassPullOut: {
+                        $let: {
+                            vars: {
+                                match: {
+                                    $arrayElemAt: [
+                                        {
+                                            $filter: {
+                                                input: "$passTypeData",
+                                                as: "data",
+                                                cond: { $eq: ["$$data.passType", "secondPassPullOut"] }
+                                            }
+                                        },
+                                        0
+                                    ]
+                                }
+                            },
+                            in: { $ifNull: ["$$match.totalMajorQty", 0] }
                         }
                     }
                 }
             },
             {
-                $project: {
-                    _id: 0,
-                    defectName: "$_id",
-                    defectData: 1
-                }
+                $sort: { defectName: 1, areaName: 1 }
             }
         ]);
+
+
+         // Extract unique rows from inspections
+         const uniqueAffectedRows = inspections.map(ins => ({
+            itemCode: ins.item?.itemCode || "",
+            color: ins.item?.color || "",
+            supplier: ins.supplier?.name || "",
+            buyer: ins.buyer?.name || "",
+            material: ins.material?.name || ""
+        })).filter((row, index, self) => 
+            index === self.findIndex(r => 
+                r.itemCode === row.itemCode &&
+                r.color === row.color &&
+                r.supplier === row.supplier &&
+                r.buyer === row.buyer &&
+                r.material === row.material
+            )
+        );
 
         return res.status(200).json({
             message: "export defects",
             exportDefectsReport: defectDataAggregation,
+            affectedRowsInspection: uniqueAffectedRows
         });
 
     } catch (error) {
         return res.status(404).json({ message: error.message });
     }
 };
+
+
 
 
 
@@ -429,15 +754,18 @@ export const createInspection = async (req,res)=>{
         const startOfDay = moment(inspection.date).startOf('day').toDate();
         const endOfDay = moment(inspection.date).endOf('day').toDate();
 
-        const isDuplicateItemCode = await Inspection.findOne({
-            'item._id': inspection.item._id,
+        const isDuplicateItemCode =  await Inspection.findOne({
             date: {
                 $gte: startOfDay,
                 $lt: endOfDay
-            }
+            },
+            'item._id': inspection.item._id,
+            'supplier._id': inspection.supplier._id,
+            'totalMinWork.start':inspection.totalMinWork.start,
+            'totalMinWork.end':inspection.totalMinWork.end
         }).countDocuments();
 
-        if (isDuplicateItemCode > 0) {
+        if (isDuplicateItemCode) {
             return res.status(200).json({message:'duplicate'});
         }
 
@@ -458,6 +786,10 @@ export const createInspection = async (req,res)=>{
         newInspection.firstPass.defectQty = inspection.firstPass.defectQty;
         newInspection.firstPass.totalGoodQty = inspection.firstPass.totalGoodQty;
         newInspection.firstPass.totalPullOutQty= inspection.firstPass.totalPullOutQty;
+
+        newInspection.passIssues.firstDefect = 0;
+        newInspection.passIssues.firstPullOut = 0;
+        newInspection.passIssues.secondPullOut = 0;
            
         newInspection.secondPass.totalGoodQty= inspection.secondPass.totalGoodQty;
         newInspection.secondPass.totalPullOutQty= inspection.secondPass.totalPullOutQty;
@@ -489,16 +821,21 @@ export const editInspection = async (req,res) =>{
     if(!mongoose.Types.ObjectId.isValid(_id))
         return res.status(404).send('no item exist with that id');
     try{
-        //
-        let isDuplicateInspection = await Inspection.find({
-            date:{
+  
+        const isDuplicateInspection = await Inspection.findOne({
+            date: {
                 $gte: startOfDay,
                 $lt: endOfDay
-            },'item._id':item._id,
-            _id:{$ne:_id}}).countDocuments();
+            },
+            'item._id': item._id,
+            'supplier._id': supplier._id,
+            'totalMinWork.start':totalMinWork.start,
+            'totalMinWork.end':totalMinWork.end,
+            _id: { $ne: _id } // Exclude the current document
+        });
 
        
-        if (isDuplicateInspection > 0) {
+        if (isDuplicateInspection) {
             return res.status(200).json({message:'edit duplicate'});
         }
         //
