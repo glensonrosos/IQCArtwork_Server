@@ -20,43 +20,79 @@ export const getItems = async (req,res)=>{
     }
 }
 
-export const createItem = async (req,res)=>{
-    const item = req.body;
-    try{
-        const newItem = await new Item(item);
-        await newItem.save();
-        res.status(201).json(item);
-    }catch(error){
-        res.status(404).json({message: error.message});
-    }
-}
+// export const createItem = async (req,res)=>{
+//     const item = req.body;
+//     try{
+//         const newItem = await new Item(item);
+//         await newItem.save();
+//         res.status(201).json(item);
+//     }catch(error){
+//         res.status(404).json({message: error.message});
+//     }
+// }
 
 export const createMultipleItem = async (req, res) => {
     const items = req.body; // Expecting an array of items
+
     try {
-        const newItems = await Item.insertMany(items);
-        res.status(201).json({message: "insertion successful"});
+        // Find the maximum number in the existing collection
+        const maxItem = await Item.findOne().sort({ number: -1 }).select("number");
+        let nextNumber = maxItem ? maxItem.number + 1 : 1;
+
+        // Assign auto-incrementing numbers to each item
+        const itemsWithNumbers = items.map(item => {
+            item.number = nextNumber++;
+            return item;
+        });
+
+        // Insert the updated items into the collection
+        const newItems = await Item.insertMany(itemsWithNumbers);
+
+        res.status(201).json({ message: "Insertion successful", newItems });
     } catch (error) {
-        res.status(404).json({ message: error });
+        console.error(error);
+        res.status(500).json({ message: "An error occurred", error: error.message });
     }
-}
+};
+
 
 export const findItems = async (req, res) => {
-
     const { itemCode } = req.body;
+
     try {
-        const items = await Item.find({ itemCode: { $regex: '.*' + itemCode + '.*', $options: 'i' } }); 
+        const items = await Item.aggregate([
+            {
+                $match: {
+                    itemCode: { $regex: '.*' + itemCode + '.*', $options: 'i' }
+                }
+            },
+            {
+                $addFields: {
+                    isExactMatch: {
+                        $cond: {
+                            if: { $eq: ["$itemCode", itemCode] },
+                            then: 1,
+                            else: 0
+                        }
+                    }
+                }
+            },
+            {
+                $sort: { isExactMatch: -1, itemCode: 1 }
+            }
+        ]);
 
-        if (items.length > 0)
-            return res.status(200).json({ items: items, message: "item found" });
-        else
+        if (items.length > 0) {
+            return res.status(200).json({ items, message: "item found" });
+        } else {
             return res.status(200).json({ items: [], message: "no found" });
-
+        }
     } catch (error) {
         console.log(error);
         return res.status(500).json({ message: "An error occurred", error: error.message });
     }
-}
+};
+
 
 
 export const getItemById = async (req,res)=>{
